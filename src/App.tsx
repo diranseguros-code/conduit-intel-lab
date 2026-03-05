@@ -13,6 +13,7 @@ import Comunicacao from "./pages/Comunicacao";
 import Calls from "./pages/Calls";
 import AiInsights from "./pages/AiInsights";
 import Analytics from "./pages/Analytics";
+import Notificacoes from "./pages/Notificacoes";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,7 @@ const App = () => (
           <Route path="/calls" element={<Calls />} />
           <Route path="/ai-insights" element={<AiInsights />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/notificacoes" element={<Notificacoes />} />
           <Route path="/settings/integrations" element={<Integrations />} />
           <Route path="/inbox" element={<Inbox />} />
           <Route path="*" element={<NotFound />} />

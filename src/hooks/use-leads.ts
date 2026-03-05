@@ -14,6 +14,8 @@ export type Lead = {
   created_at: string;
   updated_at: string;
   user_id: string | null;
+  pipeline_stage: string;
+  phone: string | null;
 };
 
 export function useLeads() {

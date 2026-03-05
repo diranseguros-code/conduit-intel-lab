@@ -19,33 +19,42 @@ export type Database = {
           ai_processed: boolean | null
           content_type: string
           created_at: string
+          direction: string | null
+          duration_seconds: number | null
           id: string
           lead_id: string
           message_content: string | null
           provider: string
           sentiment_analysis: string | null
+          subject: string | null
           user_id: string | null
         }
         Insert: {
           ai_processed?: boolean | null
           content_type?: string
           created_at?: string
+          direction?: string | null
+          duration_seconds?: number | null
           id?: string
           lead_id: string
           message_content?: string | null
           provider: string
           sentiment_analysis?: string | null
+          subject?: string | null
           user_id?: string | null
         }
         Update: {
           ai_processed?: boolean | null
           content_type?: string
           created_at?: string
+          direction?: string | null
+          duration_seconds?: number | null
           id?: string
           lead_id?: string
           message_content?: string | null
           provider?: string
           sentiment_analysis?: string | null
+          subject?: string | null
           user_id?: string | null
         }
         Relationships: [
@@ -68,6 +77,8 @@ export type Database = {
           last_interaction_at: string | null
           lead_score: number | null
           name: string
+          phone: string | null
+          pipeline_stage: string
           status: string
           updated_at: string
           user_id: string | null
@@ -81,6 +92,8 @@ export type Database = {
           last_interaction_at?: string | null
           lead_score?: number | null
           name: string
+          phone?: string | null
+          pipeline_stage?: string
           status?: string
           updated_at?: string
           user_id?: string | null
@@ -94,6 +107,8 @@ export type Database = {
           last_interaction_at?: string | null
           lead_score?: number | null
           name?: string
+          phone?: string | null
+          pipeline_stage?: string
           status?: string
           updated_at?: string
           user_id?: string | null

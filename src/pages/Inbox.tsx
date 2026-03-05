@@ -96,19 +96,29 @@ export default function Inbox() {
   const [selectedId, setSelectedId] = useState<string | null>(mockInteractions[0]?.id || null);
   const [filter, setFilter] = useState("all");
   const [analyzing, setAnalyzing] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
 
   // Try to load real data, fallback to mock
   useEffect(() => {
     const loadInteractions = async () => {
-      const { data } = await supabase
-        .from("interactions")
-        .select("*, leads(*)")
-        .order("created_at", { ascending: false })
-        .limit(50);
+      try {
+        const { data, error } = await supabase
+          .from("interactions")
+          .select("*, leads(*)")
+          .order("created_at", { ascending: false })
+          .limit(50);
 
-      if (data && data.length > 0) {
-        setInteractions(data as unknown as Interaction[]);
-        setSelectedId(data[0].id);
+        if (error) {
+          console.error("Failed to load interactions:", error.message);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          setInteractions(data as unknown as Interaction[]);
+          setSelectedId(data[0].id);
+        }
+      } catch (e) {
+        console.error("Network error loading interactions:", e);
       }
     };
     loadInteractions();
@@ -300,9 +310,27 @@ export default function Inbox() {
                   <input
                     type="text"
                     placeholder="Responder..."
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && replyText.trim()) {
+                        toast({ title: "Mensagem enviada", description: `Resposta para ${selected.leads?.name}: "${replyText.trim()}"` });
+                        setReplyText("");
+                      }
+                    }}
                     className="flex-1 bg-secondary rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-primary"
                   />
-                  <Button size="icon" className="flex-shrink-0">
+                  <Button
+                    size="icon"
+                    className="flex-shrink-0"
+                    disabled={!replyText.trim()}
+                    onClick={() => {
+                      if (replyText.trim()) {
+                        toast({ title: "Mensagem enviada", description: `Resposta para ${selected.leads?.name}: "${replyText.trim()}"` });
+                        setReplyText("");
+                      }
+                    }}
+                  >
                     <Send className="w-4 h-4" />
                   </Button>
                 </div>

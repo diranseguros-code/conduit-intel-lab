@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
+
 import {
   CheckCircle2, Loader2, ArrowRight, ArrowLeft, Mail,
   Calendar, Users, MessageCircle, Instagram, Facebook, Zap, Shield
@@ -50,60 +50,19 @@ export function IntegrationWizard() {
 
   const provider = selectedProvider ? PROVIDERS[selectedProvider] : null;
 
-  // Helper to save/update Google connection
-  const saveGoogleConnection = async (providerToken: string | null) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Usuário não autenticado");
 
-    // Check if connection already exists (RLS scoped to current user)
-    const { data: existing } = await supabase
-      .from("social_connections")
-      .select("id")
-      .eq("provider", "google")
-      .maybeSingle();
-
-    if (existing) {
-      await supabase
-        .from("social_connections")
-        .update({
-          status: "connected",
-          access_token_enc: providerToken,
-          provider_user_id: user.id,
-        })
-        .eq("id", existing.id);
-    } else {
-      await supabase.from("social_connections").insert({
-        provider: "google",
-        provider_user_id: user.id,
-        status: "connected",
-        user_id: user.id,
-        access_token_enc: providerToken,
-      });
-    }
-  };
-
-  // Auto-advance after Google OAuth return
+  // Auto-advance after Google Contacts OAuth callback return
   useEffect(() => {
-    const pending = localStorage.getItem("nexus_integration_pending");
-    if (pending !== "google") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("google_contacts") === "success") {
+      // Clean URL
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, "", cleanUrl);
 
-    localStorage.removeItem("nexus_integration_pending");
-
-    (async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) return;
-
-        await saveGoogleConnection(session.provider_token || null);
-
-        setSelectedProvider("google");
-        setStep(2);
-        toast({ title: "Autenticado com sucesso!", description: "Conexão com Google estabelecida." });
-      } catch (err) {
-        console.error("OAuth return error:", err);
-        toast({ title: "Erro ao salvar conexão", description: err instanceof Error ? err.message : "Erro desconhecido", variant: "destructive" });
-      }
-    })();
+      setSelectedProvider("google");
+      setStep(2);
+      toast({ title: "Autenticado com sucesso!", description: "Conexão com Google Contatos estabelecida." });
+    }
   }, []);
 
   const handleSelectProvider = (p: Provider) => {
@@ -119,26 +78,16 @@ export function IntegrationWizard() {
 
     try {
       if (selectedProvider === "google") {
-        localStorage.setItem("nexus_integration_pending", "google");
-        const result = await lovable.auth.signInWithOAuth("google", {
-          redirect_uri: window.location.origin + "/settings/integrations",
+        // Use custom OAuth flow for Google Contacts (separate from login)
+        const { data, error } = await supabase.functions.invoke("google-contacts-auth", {
+          body: { redirect_uri: window.location.origin + "/settings/integrations" },
         });
-        if (result.error) throw result.error;
-        
-        // If no redirect happened (user already authenticated), advance directly
-        if (!result.redirected) {
-          localStorage.removeItem("nexus_integration_pending");
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user) {
-            await saveGoogleConnection(session.provider_token || null);
-            setStep(2);
-            toast({ title: "Autenticado com sucesso!", description: "Conexão com Google estabelecida." });
-          }
-          setConnecting(false);
+        if (error) throw new Error(error.message || "Falha ao iniciar autenticação Google");
+        if (data?.url) {
+          window.location.href = data.url;
           return;
         }
-        // OAuth redirect will happen — user returns authenticated
-        return;
+        throw new Error("URL de autenticação não recebida");
       }
 
       // Meta: simulated flow (no real OAuth credentials yet)

@@ -63,7 +63,7 @@ serve(async (req) => {
       const errBody = await peopleResponse.text();
       console.error("People API error:", peopleResponse.status, errBody);
 
-      if (peopleResponse.status === 401 || peopleResponse.status === 403) {
+      if (peopleResponse.status === 401) {
         // Token expired — mark connection for re-auth
         await adminClient
           .from("social_connections")
@@ -72,6 +72,20 @@ serve(async (req) => {
           .eq("provider", "google");
 
         throw new Error("Google token expired. Please reconnect Google.");
+      }
+
+      // Check if it's a "API not enabled" error
+      if (peopleResponse.status === 403) {
+        if (errBody.includes("SERVICE_DISABLED") || errBody.includes("has not been used in project")) {
+          throw new Error("People API is not enabled in your Google Cloud project. Please enable it at console.developers.google.com and try again.");
+        }
+        // Other 403 = permission issue, mark for re-auth
+        await adminClient
+          .from("social_connections")
+          .update({ status: "expired", access_token_enc: null })
+          .eq("user_id", user.id)
+          .eq("provider", "google");
+        throw new Error("Google permission denied. Please reconnect Google.");
       }
 
       throw new Error(`Google People API error: ${peopleResponse.status}`);

@@ -50,7 +50,39 @@ export function IntegrationWizard() {
 
   const provider = selectedProvider ? PROVIDERS[selectedProvider] : null;
 
-  // Auto-advance after Google OAuth return & capture provider_token
+  // Helper to save/update Google connection
+  const saveGoogleConnection = async (providerToken: string | null) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Usuário não autenticado");
+
+    // Check if connection already exists (RLS scoped to current user)
+    const { data: existing } = await supabase
+      .from("social_connections")
+      .select("id")
+      .eq("provider", "google")
+      .maybeSingle();
+
+    if (existing) {
+      await supabase
+        .from("social_connections")
+        .update({
+          status: "connected",
+          access_token_enc: providerToken,
+          provider_user_id: user.id,
+        })
+        .eq("id", existing.id);
+    } else {
+      await supabase.from("social_connections").insert({
+        provider: "google",
+        provider_user_id: user.id,
+        status: "connected",
+        user_id: user.id,
+        access_token_enc: providerToken,
+      });
+    }
+  };
+
+  // Auto-advance after Google OAuth return
   useEffect(() => {
     const pending = localStorage.getItem("nexus_integration_pending");
     if (pending !== "google") return;
@@ -62,22 +94,14 @@ export function IntegrationWizard() {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user) return;
 
-        const user = session.user;
-        const providerToken = session.provider_token || null;
-
-        await supabase.from("social_connections").upsert({
-          provider: "google",
-          provider_user_id: user.id,
-          status: "connected",
-          user_id: user.id,
-          access_token_enc: providerToken, // Store provider token for People API
-        }, { onConflict: "user_id,provider" }).throwOnError();
+        await saveGoogleConnection(session.provider_token || null);
 
         setSelectedProvider("google");
         setStep(2);
         toast({ title: "Autenticado com sucesso!", description: "Conexão com Google estabelecida." });
       } catch (err) {
         console.error("OAuth return error:", err);
+        toast({ title: "Erro ao salvar conexão", description: err instanceof Error ? err.message : "Erro desconhecido", variant: "destructive" });
       }
     })();
   }, []);
@@ -98,10 +122,6 @@ export function IntegrationWizard() {
         localStorage.setItem("nexus_integration_pending", "google");
         const result = await lovable.auth.signInWithOAuth("google", {
           redirect_uri: window.location.origin + "/settings/integrations",
-          extraParams: {
-            access_type: "offline",
-            prompt: "consent",
-          },
         });
         if (result.error) throw result.error;
         
@@ -110,14 +130,7 @@ export function IntegrationWizard() {
           localStorage.removeItem("nexus_integration_pending");
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
-            const providerToken = session.provider_token || null;
-            await supabase.from("social_connections").upsert({
-              provider: "google",
-              provider_user_id: session.user.id,
-              status: "connected",
-              user_id: session.user.id,
-              access_token_enc: providerToken,
-            }, { onConflict: "user_id,provider" }).throwOnError();
+            await saveGoogleConnection(session.provider_token || null);
             setStep(2);
             toast({ title: "Autenticado com sucesso!", description: "Conexão com Google estabelecida." });
           }

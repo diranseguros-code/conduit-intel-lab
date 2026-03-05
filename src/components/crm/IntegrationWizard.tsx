@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +50,34 @@ export function IntegrationWizard() {
 
   const provider = selectedProvider ? PROVIDERS[selectedProvider] : null;
 
+  // Auto-advance after Google OAuth return
+  useEffect(() => {
+    const pending = localStorage.getItem("nexus_integration_pending");
+    if (pending !== "google") return;
+
+    localStorage.removeItem("nexus_integration_pending");
+
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        await supabase.from("social_connections").insert({
+          provider: "google",
+          provider_user_id: user.id,
+          status: "connected",
+          user_id: user.id,
+        });
+
+        setSelectedProvider("google");
+        setStep(2);
+        toast({ title: "Autenticado com sucesso!", description: "Conexão com Google estabelecida." });
+      } catch {
+        // silently fail — user can retry manually
+      }
+    })();
+  }, []);
+
   const handleSelectProvider = (p: Provider) => {
     setSelectedProvider(p);
     setSelectedPermissions([]);
@@ -63,8 +91,9 @@ export function IntegrationWizard() {
 
     try {
       if (selectedProvider === "google") {
+        localStorage.setItem("nexus_integration_pending", "google");
         const { error } = await lovable.auth.signInWithOAuth("google", {
-          redirect_uri: window.location.origin,
+          redirect_uri: window.location.origin + "/settings/integrations",
         });
         if (error) throw error;
         // OAuth redirect will happen — user returns authenticated

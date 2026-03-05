@@ -19,7 +19,7 @@ const navItems = [
 ];
 
 const bottomItems = [
-  { icon: Bell, label: "Notificações", badge: 3, path: "/" },
+  { icon: Bell, label: "Notificações", badge: 3, path: "/notificacoes" },
   { icon: Settings, label: "Integrações", path: "/settings/integrations" },
 ];
 

@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.sync-google-contacts]
 verify_jwt = false
+
+[functions.google-contacts-auth]
+verify_jwt = false
+
+[functions.google-contacts-callback]
+verify_jwt = false

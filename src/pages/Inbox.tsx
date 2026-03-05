@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { CrmSidebar } from "@/components/crm/CrmSidebar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useInteractions } from "@/hooks/use-interactions";
+import { useCreateInteraction } from "@/hooks/use-create-interaction";
 import {
   Instagram, MessageCircle, Linkedin, Facebook,
   Send, Bot, Loader2,
@@ -37,10 +38,11 @@ export default function Inbox() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [sending, setSending] = useState(false);
 
   const { data: interactions = [], isLoading } = useInteractions(filter);
+  const createInteraction = useCreateInteraction();
 
-  // Auto-select first when data loads
   const selected = interactions.find((i) => i.id === selectedId) ?? (interactions.length > 0 && !selectedId ? interactions[0] : null);
 
   const handleAnalyze = async (interactionId: string) => {
@@ -62,10 +64,24 @@ export default function Inbox() {
     setAnalyzing(null);
   };
 
-  const handleSendReply = () => {
-    if (!replyText.trim() || !selected) return;
-    toast({ title: "Mensagem enviada", description: `Resposta para ${selected.leads?.name}: "${replyText.trim()}"` });
-    setReplyText("");
+  const handleSendReply = async () => {
+    if (!replyText.trim() || !selected || !selected.leads) return;
+
+    setSending(true);
+    try {
+      await createInteraction.mutateAsync({
+        lead_id: selected.lead_id,
+        provider: selected.provider,
+        content_type: "text",
+        message_content: replyText.trim(),
+        direction: "outbound",
+      });
+      toast({ title: "Mensagem enviada", description: `Resposta registrada para ${selected.leads.name}` });
+      setReplyText("");
+    } catch {
+      // Error handled by hook
+    }
+    setSending(false);
   };
 
   const timeAgo = (date: string) => {
@@ -161,26 +177,31 @@ export default function Inbox() {
                     </CardContent>
                   </Card>
                 )}
-                <div className="flex gap-3">
-                  <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
-                    <span className="text-xs font-semibold text-foreground">{selected.leads?.name?.charAt(0)}</span>
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-medium text-foreground">{selected.leads?.name}</span>
-                      <span className="text-[10px] text-muted-foreground">{new Date(selected.created_at).toLocaleString("pt-BR")}</span>
-                    </div>
-                    <div className="bg-secondary rounded-lg rounded-tl-none p-3">
-                      <p className="text-sm text-foreground">{selected.message_content}</p>
-                    </div>
-                    {selected.sentiment_analysis && (
-                      <div className="flex items-center gap-1.5 mt-1.5">
-                        <SentimentDot sentiment={selected.sentiment_analysis} />
-                        <span className="text-[10px] text-muted-foreground">{selected.sentiment_analysis}</span>
+
+                {/* Show all interactions for this lead */}
+                {interactions
+                  .filter((i) => i.lead_id === selected.lead_id)
+                  .map((msg) => {
+                    const isOutbound = (msg as any).direction === "outbound";
+                    return (
+                      <div key={msg.id} className={`flex gap-3 mb-4 ${isOutbound ? "flex-row-reverse" : ""}`}>
+                        <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs font-semibold text-foreground">
+                            {isOutbound ? "Eu" : msg.leads?.name?.charAt(0) ?? "?"}
+                          </span>
+                        </div>
+                        <div className={`flex-1 ${isOutbound ? "text-right" : ""}`}>
+                          <div className={`flex items-center gap-2 mb-1 ${isOutbound ? "justify-end" : ""}`}>
+                            <span className="text-sm font-medium text-foreground">{isOutbound ? "Você" : msg.leads?.name}</span>
+                            <span className="text-[10px] text-muted-foreground">{new Date(msg.created_at).toLocaleString("pt-BR")}</span>
+                          </div>
+                          <div className={`${isOutbound ? "bg-primary/20 rounded-lg rounded-tr-none" : "bg-secondary rounded-lg rounded-tl-none"} p-3 inline-block max-w-[80%]`}>
+                            <p className="text-sm text-foreground text-left">{msg.message_content}</p>
+                          </div>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </div>
+                    );
+                  })}
               </ScrollArea>
 
               <div className="px-6 py-3 border-t border-border">
@@ -190,11 +211,11 @@ export default function Inbox() {
                     placeholder="Responder..."
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") handleSendReply(); }}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !sending) handleSendReply(); }}
                     className="flex-1 bg-secondary rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-primary"
                   />
-                  <Button size="icon" className="flex-shrink-0" disabled={!replyText.trim()} onClick={handleSendReply}>
-                    <Send className="w-4 h-4" />
+                  <Button size="icon" className="flex-shrink-0" disabled={!replyText.trim() || sending} onClick={handleSendReply}>
+                    {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   </Button>
                 </div>
               </div>

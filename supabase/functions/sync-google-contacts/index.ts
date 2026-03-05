@@ -94,51 +94,49 @@ serve(async (req) => {
     const peopleData = await peopleResponse.json();
     const connections = peopleData.connections || [];
 
-    let imported = 0;
-    let skipped = 0;
+    // Collect all emails to check duplicates in one query
+    const contactsToProcess = connections.map((person: any) => ({
+      name: person.names?.[0]?.displayName || person.emailAddresses?.[0]?.value || null,
+      email: person.emailAddresses?.[0]?.value || null,
+      company: person.organizations?.[0]?.name || null,
+    })).filter((c: any) => c.name);
 
-    for (const person of connections) {
-      const name =
-        person.names?.[0]?.displayName ||
-        person.emailAddresses?.[0]?.value ||
-        null;
-      if (!name) {
-        skipped++;
-        continue;
-      }
+    const emails = contactsToProcess.filter((c: any) => c.email).map((c: any) => c.email);
 
-      const email = person.emailAddresses?.[0]?.value || null;
-      const company = person.organizations?.[0]?.name || null;
+    // Batch check existing emails
+    let existingEmails = new Set<string>();
+    if (emails.length > 0) {
+      const { data: existing } = await adminClient
+        .from("leads")
+        .select("email")
+        .eq("user_id", user.id)
+        .in("email", emails);
+      existingEmails = new Set((existing || []).map((e: any) => e.email));
+    }
 
-      // Skip duplicates by email
-      if (email) {
-        const { data: existing } = await adminClient
-          .from("leads")
-          .select("id")
-          .eq("user_id", user.id)
-          .eq("email", email)
-          .maybeSingle();
-
-        if (existing) {
-          skipped++;
-          continue;
-        }
-      }
-
-      const { error: insertErr } = await adminClient.from("leads").insert({
-        name,
-        email,
-        company,
+    // Filter out duplicates and prepare batch insert
+    const newLeads = contactsToProcess
+      .filter((c: any) => !c.email || !existingEmails.has(c.email))
+      .map((c: any) => ({
+        name: c.name,
+        email: c.email,
+        company: c.company,
         user_id: user.id,
         status: "New",
         lead_score: 0,
-      });
+      }));
 
+    const skipped = connections.length - newLeads.length;
+    let imported = 0;
+
+    // Insert in batches of 50
+    for (let i = 0; i < newLeads.length; i += 50) {
+      const batch = newLeads.slice(i, i + 50);
+      const { error: insertErr, data } = await adminClient.from("leads").insert(batch).select("id");
       if (insertErr) {
-        console.error("Insert error:", insertErr.message);
-        skipped++;
+        console.error("Batch insert error:", insertErr.message);
       } else {
-        imported++;
+        imported += (data?.length || 0);
       }
     }
 

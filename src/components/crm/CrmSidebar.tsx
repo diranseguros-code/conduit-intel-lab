@@ -1,29 +1,32 @@
 import { 
   LayoutDashboard, Users, Building2, Target, Mail, Phone, 
-  Brain, BarChart3, Settings, Bell, Search, Zap
+  Brain, BarChart3, Settings, Bell, Search, Zap, Inbox
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 
 const navItems = [
-  { icon: LayoutDashboard, label: "Dashboard", active: true },
-  { icon: Users, label: "Leads" },
-  { icon: Building2, label: "Contas" },
-  { icon: Target, label: "Pipeline" },
-  { icon: Mail, label: "Comunicação" },
-  { icon: Phone, label: "Calls" },
-  { icon: Brain, label: "AI Insights" },
-  { icon: BarChart3, label: "Analytics" },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/" },
+  { icon: Inbox, label: "Inbox", path: "/inbox" },
+  { icon: Users, label: "Leads", path: "/" },
+  { icon: Building2, label: "Contas", path: "/" },
+  { icon: Target, label: "Pipeline", path: "/" },
+  { icon: Mail, label: "Comunicação", path: "/" },
+  { icon: Phone, label: "Calls", path: "/" },
+  { icon: Brain, label: "AI Insights", path: "/" },
+  { icon: BarChart3, label: "Analytics", path: "/" },
 ];
 
 const bottomItems = [
-  { icon: Bell, label: "Notificações", badge: 3 },
-  { icon: Settings, label: "Configurações" },
+  { icon: Bell, label: "Notificações", badge: 3, path: "/" },
+  { icon: Settings, label: "Integrações", path: "/settings/integrations" },
 ];
 
 export function CrmSidebar() {
   const [collapsed, setCollapsed] = useState(false);
-
+  const navigate = useNavigate();
+  const location = useLocation();
   return (
     <aside className={cn(
       "flex flex-col h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300",
@@ -53,25 +56,29 @@ export function CrmSidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-2 space-y-0.5 overflow-y-auto">
-        {navItems.map((item) => (
-          <button
-            key={item.label}
-            className={cn(
-              "flex items-center gap-2.5 w-full px-3 py-2 rounded-md text-sm transition-colors",
-              item.active
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            )}
-          >
-            <item.icon className="w-4 h-4 flex-shrink-0" />
-            {!collapsed && <span>{item.label}</span>}
-            {item.label === "AI Insights" && !collapsed && (
-              <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded bg-gradient-ai text-primary-foreground">
-                AI
-              </span>
-            )}
-          </button>
-        ))}
+        {navItems.map((item) => {
+          const isActive = location.pathname === item.path && (item.label === "Dashboard" || item.label === "Inbox");
+          return (
+            <button
+              key={item.label}
+              onClick={() => navigate(item.path)}
+              className={cn(
+                "flex items-center gap-2.5 w-full px-3 py-2 rounded-md text-sm transition-colors",
+                isActive
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              )}
+            >
+              <item.icon className="w-4 h-4 flex-shrink-0" />
+              {!collapsed && <span>{item.label}</span>}
+              {item.label === "AI Insights" && !collapsed && (
+                <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded bg-gradient-ai text-primary-foreground">
+                  AI
+                </span>
+              )}
+            </button>
+          );
+        })}
       </nav>
 
       {/* Bottom */}
@@ -79,7 +86,13 @@ export function CrmSidebar() {
         {bottomItems.map((item) => (
           <button
             key={item.label}
-            className="flex items-center gap-2.5 w-full px-3 py-2 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+            onClick={() => navigate(item.path)}
+            className={cn(
+              "flex items-center gap-2.5 w-full px-3 py-2 rounded-md text-sm transition-colors",
+              location.pathname === item.path
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground hover:bg-sidebar-accent"
+            )}
           >
             <item.icon className="w-4 h-4 flex-shrink-0" />
             {!collapsed && <span>{item.label}</span>}

@@ -9,13 +9,13 @@ import { useNavigate, useLocation } from "react-router-dom";
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/" },
   { icon: Inbox, label: "Inbox", path: "/inbox" },
-  { icon: Users, label: "Leads", path: "/" },
-  { icon: Building2, label: "Contas", path: "/" },
-  { icon: Target, label: "Pipeline", path: "/" },
-  { icon: Mail, label: "Comunicação", path: "/" },
-  { icon: Phone, label: "Calls", path: "/" },
-  { icon: Brain, label: "AI Insights", path: "/" },
-  { icon: BarChart3, label: "Analytics", path: "/" },
+  { icon: Users, label: "Leads", path: "/leads" },
+  { icon: Building2, label: "Contas", path: "/contas" },
+  { icon: Target, label: "Pipeline", path: "/pipeline" },
+  { icon: Mail, label: "Comunicação", path: "/comunicacao" },
+  { icon: Phone, label: "Calls", path: "/calls" },
+  { icon: Brain, label: "AI Insights", path: "/ai-insights" },
+  { icon: BarChart3, label: "Analytics", path: "/analytics" },
 ];
 
 const bottomItems = [
@@ -57,7 +57,7 @@ export function CrmSidebar() {
       {/* Nav */}
       <nav className="flex-1 px-2 space-y-0.5 overflow-y-auto">
         {navItems.map((item) => {
-          const isActive = location.pathname === item.path && (item.label === "Dashboard" || item.label === "Inbox");
+          const isActive = location.pathname === item.path;
           return (
             <button
               key={item.label}

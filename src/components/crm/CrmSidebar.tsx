@@ -1,8 +1,9 @@
 import { 
   LayoutDashboard, Users, Building2, Target, Mail, Phone, 
-  Brain, BarChart3, Settings, Bell, Search, Zap, Inbox
+  Brain, BarChart3, Settings, Bell, Search, Zap, Inbox, LogOut
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
@@ -27,6 +28,7 @@ export function CrmSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, signOut } = useAuth();
   return (
     <aside className={cn(
       "flex flex-col h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300",
@@ -103,6 +105,22 @@ export function CrmSidebar() {
             )}
           </button>
         ))}
+
+        {/* User + Logout */}
+        {user && (
+          <div className="mt-2 pt-2 border-t border-sidebar-border">
+            {!collapsed && (
+              <p className="px-3 py-1 text-[11px] text-muted-foreground truncate">{user.email}</p>
+            )}
+            <button
+              onClick={signOut}
+              className="flex items-center gap-2.5 w-full px-3 py-2 rounded-md text-sm text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+            >
+              <LogOut className="w-4 h-4 flex-shrink-0" />
+              {!collapsed && <span>Sair</span>}
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   );

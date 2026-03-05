@@ -15,13 +15,13 @@ serve(async (req) => {
     if (!authHeader) throw new Error("Missing authorization header");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const clientId = Deno.env.get("GOOGLE_CLIENT_ID")!;
 
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const { data: { user }, error } = await userClient.auth.getUser();
+    // Use service role + token to verify user (avoids stale session issues)
+    const token = authHeader.replace("Bearer ", "");
+    const adminClient = createClient(supabaseUrl, serviceKey);
+    const { data: { user }, error } = await adminClient.auth.getUser(token);
     if (error || !user) throw new Error("User not authenticated");
 
     const { redirect_uri } = await req.json();

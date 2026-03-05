@@ -151,12 +151,39 @@ export function IntegrationWizard() {
     }
     setConnecting(true);
 
-    // Simulate initial sync
-    await new Promise((r) => setTimeout(r, 2000));
-    setConnected(true);
-    setStep(3);
-    setConnecting(false);
-    toast({ title: "Sincronização iniciada!", description: "Seus dados estão sendo importados." });
+    try {
+      // If Google contacts permission is selected, trigger real sync
+      if (selectedProvider === "google" && selectedPermissions.includes("contacts")) {
+        const { data, error } = await supabase.functions.invoke("sync-google-contacts");
+        if (error) {
+          console.error("Sync error:", error);
+          toast({
+            title: "Erro na sincronização de contatos",
+            description: error.message || "Tente reconectar o Google.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Contatos importados!",
+            description: `${data.imported} contatos importados, ${data.skipped} ignorados.`,
+          });
+        }
+      }
+
+      // Simulate sync for other permissions
+      await new Promise((r) => setTimeout(r, 1500));
+      setConnected(true);
+      setStep(3);
+      toast({ title: "Sincronização iniciada!", description: "Seus dados estão sendo importados." });
+    } catch (err) {
+      toast({
+        title: "Erro na sincronização",
+        description: err instanceof Error ? err.message : "Falha ao sincronizar.",
+        variant: "destructive",
+      });
+    } finally {
+      setConnecting(false);
+    }
   };
 
   const togglePermission = (id: string) => {

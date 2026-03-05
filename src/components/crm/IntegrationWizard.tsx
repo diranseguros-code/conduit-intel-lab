@@ -92,10 +92,28 @@ export function IntegrationWizard() {
     try {
       if (selectedProvider === "google") {
         localStorage.setItem("nexus_integration_pending", "google");
-        const { error } = await lovable.auth.signInWithOAuth("google", {
+        const result = await lovable.auth.signInWithOAuth("google", {
           redirect_uri: window.location.origin + "/settings/integrations",
         });
-        if (error) throw error;
+        if (result.error) throw result.error;
+        
+        // If no redirect happened (user already authenticated), advance directly
+        if (!result.redirected) {
+          localStorage.removeItem("nexus_integration_pending");
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            await supabase.from("social_connections").insert({
+              provider: "google",
+              provider_user_id: user.id,
+              status: "connected",
+              user_id: user.id,
+            });
+            setStep(2);
+            toast({ title: "Autenticado com sucesso!", description: "Conexão com Google estabelecida." });
+          }
+          setConnecting(false);
+          return;
+        }
         // OAuth redirect will happen — user returns authenticated
         return;
       }

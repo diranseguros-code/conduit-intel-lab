@@ -11,7 +11,6 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    // Get the user's JWT from the request
     const authHeader = req.headers.get("authorization");
     if (!authHeader) throw new Error("Missing authorization header");
 
@@ -19,7 +18,7 @@ serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    // Client with user's JWT to get their identity
+    // Authenticate the user
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -27,16 +26,20 @@ serve(async (req) => {
     const { data: { user }, error: userErr } = await userClient.auth.getUser();
     if (userErr || !user) throw new Error("User not authenticated");
 
-    // Extract Google provider token from the user's identities
-    const googleIdentity = user.identities?.find((i) => i.provider === "google");
-    if (!googleIdentity) throw new Error("No Google identity found. Please reconnect Google.");
+    // Use service role to read the stored provider token
+    const adminClient = createClient(supabaseUrl, serviceKey);
 
-    // We need the provider_token which is only available during the OAuth session
-    // Get it from the session
-    const { data: { session }, error: sessionErr } = await userClient.auth.getSession();
-    if (sessionErr || !session) throw new Error("No active session");
+    const { data: connection, error: connErr } = await adminClient
+      .from("social_connections")
+      .select("access_token_enc")
+      .eq("user_id", user.id)
+      .eq("provider", "google")
+      .eq("status", "connected")
+      .maybeSingle();
 
-    const providerToken = session.provider_token;
+    if (connErr) throw new Error(`Failed to fetch connection: ${connErr.message}`);
+
+    const providerToken = connection?.access_token_enc;
     if (!providerToken) {
       throw new Error(
         "Google access token not available. Please reconnect Google to grant contacts access."
@@ -59,14 +62,23 @@ serve(async (req) => {
     if (!peopleResponse.ok) {
       const errBody = await peopleResponse.text();
       console.error("People API error:", peopleResponse.status, errBody);
+
+      if (peopleResponse.status === 401 || peopleResponse.status === 403) {
+        // Token expired — mark connection for re-auth
+        await adminClient
+          .from("social_connections")
+          .update({ status: "expired", access_token_enc: null })
+          .eq("user_id", user.id)
+          .eq("provider", "google");
+
+        throw new Error("Google token expired. Please reconnect Google.");
+      }
+
       throw new Error(`Google People API error: ${peopleResponse.status}`);
     }
 
     const peopleData = await peopleResponse.json();
     const connections = peopleData.connections || [];
-
-    // Use service role client to insert leads
-    const adminClient = createClient(supabaseUrl, serviceKey);
 
     let imported = 0;
     let skipped = 0;
@@ -84,7 +96,7 @@ serve(async (req) => {
       const email = person.emailAddresses?.[0]?.value || null;
       const company = person.organizations?.[0]?.name || null;
 
-      // Upsert by email to avoid duplicates (if email exists)
+      // Skip duplicates by email
       if (email) {
         const { data: existing } = await adminClient
           .from("leads")

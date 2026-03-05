@@ -45,29 +45,47 @@ export default function Integrations() {
   const handleConnect = async (providerId: string) => {
     setConnecting(providerId);
 
-    // Simulate OAuth flow
-    await new Promise((r) => setTimeout(r, 2000));
+    try {
+      // Simulate OAuth flow
+      await new Promise((r) => setTimeout(r, 2000));
 
-    // In production, this would redirect to OAuth provider
-    // For now, we persist a mock connection
-    const { error } = await supabase.from("social_connections").insert({
-      provider: providerId,
-      provider_user_id: `mock_${providerId}_${Date.now()}`,
-      status: "connected",
-      user_id: (await supabase.auth.getUser()).data.user?.id || "",
-    });
+      const { data: { user } } = await supabase.auth.getUser();
 
-    if (error) {
-      toast({
-        title: "Erro na conexão",
-        description: error.message,
-        variant: "destructive",
+      if (!user) {
+        toast({
+          title: "Autenticação necessária",
+          description: "Faça login para conectar integrações.",
+          variant: "destructive",
+        });
+        setConnecting(null);
+        return;
+      }
+
+      const { error } = await supabase.from("social_connections").insert({
+        provider: providerId,
+        provider_user_id: `mock_${providerId}_${Date.now()}`,
+        status: "connected",
+        user_id: user.id,
       });
-    } else {
-      setConnected((prev) => ({ ...prev, [providerId]: true }));
+
+      if (error) {
+        toast({
+          title: "Erro na conexão",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        setConnected((prev) => ({ ...prev, [providerId]: true }));
+        toast({
+          title: "Conectado com sucesso!",
+          description: `${providerId} foi integrado ao NexusCRM.`,
+        });
+      }
+    } catch (e) {
       toast({
-        title: "Conectado com sucesso!",
-        description: `${providerId} foi integrado ao NexusCRM.`,
+        title: "Erro de rede",
+        description: e instanceof Error ? e.message : "Falha na conexão com o servidor.",
+        variant: "destructive",
       });
     }
 

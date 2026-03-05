@@ -2,3 +2,6 @@ project_id = "pnrjaxjfbvuqpcpzlgsc"
 
 [functions.analyze-interaction]
 verify_jwt = false
+
+[functions.sync-google-contacts]
+verify_jwt = false

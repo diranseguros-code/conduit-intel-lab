@@ -1,9 +1,9 @@
+import { useState } from "react";
 import { CrmSidebar } from "@/components/crm/CrmSidebar";
 import { Mail, Send, Loader2 } from "lucide-react";
-import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useInteractions } from "@/hooks/use-interactions";
-import { useCreateInteraction } from "@/hooks/use-create-interaction";
+import { useSendEmail } from "@/hooks/use-send-message";
 import { useLeads } from "@/hooks/use-leads";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
@@ -11,7 +11,7 @@ import { toast } from "@/hooks/use-toast";
 const Comunicacao = () => {
   const { data: interactions = [], isLoading } = useInteractions("email");
   const { data: leads = [] } = useLeads();
-  const createInteraction = useCreateInteraction();
+  const sendEmail = useSendEmail();
   const [selectedLeadId, setSelectedLeadId] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -23,17 +23,21 @@ const Comunicacao = () => {
       return;
     }
 
+    const lead = leads.find((l) => l.id === selectedLeadId);
+    if (!lead?.email) {
+      toast({ title: "Lead sem e-mail", description: "Esse lead não tem e-mail cadastrado.", variant: "destructive" });
+      return;
+    }
+
     setSending(true);
     try {
-      await createInteraction.mutateAsync({
-        lead_id: selectedLeadId,
-        provider: "email",
-        content_type: "email",
-        message_content: body.trim(),
+      await sendEmail.mutateAsync({
+        lead_id: lead.id,
+        to_email: lead.email,
         subject: subject.trim(),
-        direction: "outbound",
+        body: body.trim(),
+        lead_name: lead.name,
       });
-      toast({ title: "E-mail registrado", description: "Mensagem salva no histórico." });
       setSubject("");
       setBody("");
       setSelectedLeadId("");
@@ -65,35 +69,38 @@ const Comunicacao = () => {
           {/* Compose */}
           <div className="rounded-lg border border-border bg-card shadow-card p-5 space-y-3">
             <h2 className="text-sm font-semibold text-card-foreground">Novo E-mail</h2>
+            <p className="text-xs text-muted-foreground">
+              Use <code className="bg-secondary px-1 rounded">{"{{lead_name}}"}</code> no assunto ou corpo para personalização automática.
+            </p>
             <select
               value={selectedLeadId}
               onChange={(e) => setSelectedLeadId(e.target.value)}
               className="w-full bg-secondary rounded-md px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-primary border border-border"
             >
               <option value="">Selecionar lead destinatário...</option>
-              {leads.map((lead) => (
+              {leads.filter((l) => l.email).map((lead) => (
                 <option key={lead.id} value={lead.id}>
-                  {lead.name} {lead.email ? `(${lead.email})` : ""}
+                  {lead.name} ({lead.email})
                 </option>
               ))}
             </select>
             <input
               type="text"
-              placeholder="Assunto"
+              placeholder="Assunto — ex: Olá {{lead_name}}, temos uma proposta!"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               className="w-full bg-secondary rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-primary border border-border"
             />
             <textarea
-              placeholder="Corpo do e-mail..."
+              placeholder="Corpo do e-mail... Use {{lead_name}} para inserir o nome do lead automaticamente."
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              rows={4}
+              rows={5}
               className="w-full bg-secondary rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-primary border border-border resize-none"
             />
             <Button onClick={handleSend} disabled={sending || !selectedLeadId || !subject.trim() || !body.trim()}>
               {sending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Send className="w-4 h-4 mr-2" />}
-              Enviar
+              Enviar E-mail
             </Button>
           </div>
 

@@ -11,3 +11,12 @@ verify_jwt = false
 
 [functions.google-contacts-callback]
 verify_jwt = false
+
+[functions.send-whatsapp]
+verify_jwt = false
+
+[functions.send-email]
+verify_jwt = false
+
+[functions.webhook-receive]
+verify_jwt = false

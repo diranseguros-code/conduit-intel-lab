@@ -13,10 +13,12 @@ export type InteractionWithLead = {
   leads: {
     id: string;
     name: string;
+    email: string | null;
     company: string | null;
     lead_score: number | null;
     ai_summary: string | null;
     status: string;
+    phone: string | null;
   } | null;
 };
 

@@ -1,48 +1,83 @@
 import { useState } from "react";
 import { CrmSidebar } from "@/components/crm/CrmSidebar";
-import { Users, Plus, Filter, Download, X } from "lucide-react";
+import { Users, Plus, Filter, Download, X, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
+import { useLeads, useCreateLead } from "@/hooks/use-leads";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
-interface Lead {
-  name: string;
-  email: string;
-  company: string;
-  source: string;
-  score: number;
-  status: "novo" | "contactado" | "qualificado" | "perdido";
-  lastActivity: string;
-}
-
-const allLeads: Lead[] = [
-  { name: "Carolina Mendes", email: "carolina@techcorp.br", company: "TechCorp Brasil", source: "LinkedIn", score: 92, status: "qualificado", lastActivity: "Hoje" },
-  { name: "Rafael Santos", email: "rafael@dataflow.io", company: "DataFlow Ltda", source: "Inbound", score: 78, status: "contactado", lastActivity: "Ontem" },
-  { name: "Amanda Liu", email: "amanda@globalpay.com", company: "GlobalPay", source: "Referência", score: 88, status: "qualificado", lastActivity: "Hoje" },
-  { name: "Bruno Ferreira", email: "bruno@finstack.com.br", company: "FinStack", source: "Evento", score: 65, status: "novo", lastActivity: "3 dias" },
-  { name: "Lucia Pereira", email: "lucia@retailmax.com", company: "RetailMax", source: "Cold Email", score: 45, status: "contactado", lastActivity: "5 dias" },
-  { name: "Marcos Almeida", email: "marcos@logitrans.br", company: "LogiTrans", source: "LinkedIn", score: 34, status: "perdido", lastActivity: "7 dias" },
-];
-
-const statusStyles = {
-  novo: "bg-primary/15 text-primary",
-  contactado: "bg-accent/15 text-accent",
-  qualificado: "bg-success/15 text-success",
-  perdido: "bg-destructive/15 text-destructive",
+const statusStyles: Record<string, string> = {
+  New: "bg-primary/15 text-primary",
+  Contacted: "bg-accent/15 text-accent",
+  Qualified: "bg-success/15 text-success",
+  Lost: "bg-destructive/15 text-destructive",
 };
 
-const statusFilters: Array<Lead["status"] | "todos"> = ["todos", "novo", "contactado", "qualificado", "perdido"];
+const statusFilters = ["todos", "New", "Contacted", "Qualified", "Lost"];
+
+function NewLeadDialog() {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [company, setCompany] = useState("");
+  const createLead = useCreateLead();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    createLead.mutate(
+      { name: name.trim(), email: email.trim() || undefined, company: company.trim() || undefined },
+      { onSuccess: () => { setOpen(false); setName(""); setEmail(""); setCompany(""); } }
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
+          <Plus className="w-3.5 h-3.5" /> Novo Lead
+        </button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Novo Lead</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div><Label htmlFor="name">Nome *</Label><Input id="name" value={name} onChange={(e) => setName(e.target.value)} required /></div>
+          <div><Label htmlFor="email">Email</Label><Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+          <div><Label htmlFor="company">Empresa</Label><Input id="company" value={company} onChange={(e) => setCompany(e.target.value)} /></div>
+          <Button type="submit" className="w-full" disabled={createLead.isPending}>
+            {createLead.isPending && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+            Criar Lead
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 const Leads = () => {
-  const [filter, setFilter] = useState<Lead["status"] | "todos">("todos");
+  const [filter, setFilter] = useState("todos");
   const [showFilter, setShowFilter] = useState(false);
+  const { data: leads = [], isLoading, error } = useLeads();
 
-  const filtered = filter === "todos" ? allLeads : allLeads.filter((l) => l.status === filter);
+  const filtered = filter === "todos" ? leads : leads.filter((l) => l.status === filter);
+
+  const timeAgo = (date: string) => {
+    const mins = Math.floor((Date.now() - new Date(date).getTime()) / 60000);
+    if (mins < 60) return `${mins}m`;
+    if (mins < 1440) return `${Math.floor(mins / 60)}h`;
+    return `${Math.floor(mins / 1440)}d`;
+  };
 
   const handleExport = () => {
     try {
       const csv = [
-        "Nome,Email,Empresa,Fonte,Score,Status,Atividade",
-        ...filtered.map((l) => `${l.name},${l.email},${l.company},${l.source},${l.score},${l.status},${l.lastActivity}`),
+        "Nome,Email,Empresa,Score,Status,Atualizado",
+        ...filtered.map((l) => `${l.name},${l.email ?? ""},${l.company ?? ""},${l.lead_score ?? 0},${l.status},${l.updated_at}`),
       ].join("\n");
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
@@ -52,13 +87,9 @@ const Leads = () => {
       a.click();
       URL.revokeObjectURL(url);
       toast({ title: "Exportado!", description: `${filtered.length} leads exportados em CSV.` });
-    } catch (e) {
+    } catch {
       toast({ title: "Erro ao exportar", description: "Não foi possível gerar o arquivo.", variant: "destructive" });
     }
-  };
-
-  const handleNewLead = () => {
-    toast({ title: "Em breve", description: "Formulário de criação de lead será implementado com autenticação." });
   };
 
   return (
@@ -90,12 +121,7 @@ const Leads = () => {
             >
               <Download className="w-3.5 h-3.5" /> Exportar
             </button>
-            <button
-              onClick={handleNewLead}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" /> Novo Lead
-            </button>
+            <NewLeadDialog />
           </div>
         </header>
 
@@ -117,54 +143,66 @@ const Leads = () => {
         )}
 
         <div className="p-6">
-          <div className="rounded-lg border border-border bg-card shadow-card overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-              <h2 className="text-sm font-semibold text-card-foreground">Leads</h2>
-              <span className="text-xs text-muted-foreground">{filtered.length} leads</span>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left px-5 py-2.5 font-medium text-muted-foreground uppercase tracking-wider">Lead</th>
-                    <th className="text-left px-3 py-2.5 font-medium text-muted-foreground uppercase tracking-wider">Empresa</th>
-                    <th className="text-left px-3 py-2.5 font-medium text-muted-foreground uppercase tracking-wider">Fonte</th>
-                    <th className="text-center px-3 py-2.5 font-medium text-muted-foreground uppercase tracking-wider">AI Score</th>
-                    <th className="text-center px-3 py-2.5 font-medium text-muted-foreground uppercase tracking-wider">Status</th>
-                    <th className="text-right px-5 py-2.5 font-medium text-muted-foreground uppercase tracking-wider">Atividade</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/50">
-                  {filtered.map((lead, i) => (
-                    <tr key={i} className="hover:bg-secondary/30 transition-colors cursor-pointer">
-                      <td className="px-5 py-3">
-                        <div>
-                          <p className="font-medium text-card-foreground">{lead.name}</p>
-                          <p className="text-muted-foreground text-[11px]">{lead.email}</p>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 text-secondary-foreground">{lead.company}</td>
-                      <td className="px-3 py-3 text-secondary-foreground">{lead.source}</td>
-                      <td className="px-3 py-3 text-center">
-                        <span className={cn(
-                          "font-mono font-medium",
-                          lead.score >= 80 ? "text-success" : lead.score >= 60 ? "text-accent" : "text-muted-foreground"
-                        )}>
-                          {lead.score}
-                        </span>
-                      </td>
-                      <td className="px-3 py-3 text-center">
-                        <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium capitalize", statusStyles[lead.status])}>
-                          {lead.status}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-right text-muted-foreground">{lead.lastActivity}</td>
+          ) : error ? (
+            <div className="text-center py-20 text-sm text-muted-foreground">
+              Erro ao carregar leads. Faça login para ver seus dados.
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="text-center py-20 text-sm text-muted-foreground">
+              Nenhum lead encontrado. Crie seu primeiro lead!
+            </div>
+          ) : (
+            <div className="rounded-lg border border-border bg-card shadow-card overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+                <h2 className="text-sm font-semibold text-card-foreground">Leads</h2>
+                <span className="text-xs text-muted-foreground">{filtered.length} leads</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left px-5 py-2.5 font-medium text-muted-foreground uppercase tracking-wider">Lead</th>
+                      <th className="text-left px-3 py-2.5 font-medium text-muted-foreground uppercase tracking-wider">Empresa</th>
+                      <th className="text-center px-3 py-2.5 font-medium text-muted-foreground uppercase tracking-wider">AI Score</th>
+                      <th className="text-center px-3 py-2.5 font-medium text-muted-foreground uppercase tracking-wider">Status</th>
+                      <th className="text-right px-5 py-2.5 font-medium text-muted-foreground uppercase tracking-wider">Atividade</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border/50">
+                    {filtered.map((lead) => (
+                      <tr key={lead.id} className="hover:bg-secondary/30 transition-colors cursor-pointer">
+                        <td className="px-5 py-3">
+                          <div>
+                            <p className="font-medium text-card-foreground">{lead.name}</p>
+                            <p className="text-muted-foreground text-[11px]">{lead.email ?? "—"}</p>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 text-secondary-foreground">{lead.company ?? "—"}</td>
+                        <td className="px-3 py-3 text-center">
+                          <span className={cn(
+                            "font-mono font-medium",
+                            (lead.lead_score ?? 0) >= 80 ? "text-success" : (lead.lead_score ?? 0) >= 60 ? "text-accent" : "text-muted-foreground"
+                          )}>
+                            {lead.lead_score ?? 0}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <span className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium capitalize", statusStyles[lead.status] ?? "bg-muted text-muted-foreground")}>
+                            {lead.status}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-right text-muted-foreground">{timeAgo(lead.updated_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </main>
     </div>

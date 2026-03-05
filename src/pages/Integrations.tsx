@@ -1,116 +1,32 @@
-import { useState, useEffect } from "react";
 import { CrmSidebar } from "@/components/crm/CrmSidebar";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { IntegrationWizard } from "@/components/crm/IntegrationWizard";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { Instagram, MessageCircle, Linkedin, Facebook, CheckCircle2, Loader2 } from "lucide-react";
-
-const providers = [
-  { id: "instagram", name: "Instagram", description: "Conecte mensagens do Instagram Direct e comentários.", icon: Instagram, color: "from-pink-500 to-purple-500" },
-  { id: "whatsapp", name: "WhatsApp Business", description: "Integre conversas do WhatsApp Business API.", icon: MessageCircle, color: "from-green-500 to-emerald-500" },
-  { id: "linkedin", name: "LinkedIn", description: "Sincronize conexões e mensagens do LinkedIn.", icon: Linkedin, color: "from-blue-600 to-blue-400" },
-  { id: "facebook", name: "Facebook", description: "Conecte Messenger e comentários de páginas.", icon: Facebook, color: "from-blue-500 to-indigo-500" },
-];
+import { Shield } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export default function Integrations() {
-  const [connecting, setConnecting] = useState<string | null>(null);
-  const [connected, setConnected] = useState<Record<string, boolean>>({});
-
-  // Load existing connections on mount
-  useEffect(() => {
-    const loadConnections = async () => {
-      try {
-        const { data } = await supabase
-          .from("social_connections")
-          .select("provider, status")
-          .eq("status", "connected");
-
-        if (data) {
-          const map: Record<string, boolean> = {};
-          data.forEach((c) => { map[c.provider] = true; });
-          setConnected(map);
-        }
-      } catch (e) {
-        console.error("Failed to load connections:", e);
-      }
-    };
-    loadConnections();
-  }, []);
-
-  const handleConnect = async (providerId: string) => {
-    setConnecting(providerId);
-    try {
-      await new Promise((r) => setTimeout(r, 2000));
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (!user) {
-        toast({ title: "Autenticação necessária", description: "Faça login para conectar integrações.", variant: "destructive" });
-        setConnecting(null);
-        return;
-      }
-
-      const { error } = await supabase.from("social_connections").insert({
-        provider: providerId,
-        provider_user_id: `mock_${providerId}_${Date.now()}`,
-        status: "connected",
-        user_id: user.id,
-      });
-
-      if (error) {
-        toast({ title: "Erro na conexão", description: error.message, variant: "destructive" });
-      } else {
-        setConnected((prev) => ({ ...prev, [providerId]: true }));
-        toast({ title: "Conectado com sucesso!", description: `${providerId} foi integrado ao NexusCRM.` });
-      }
-    } catch (e) {
-      toast({ title: "Erro de rede", description: e instanceof Error ? e.message : "Falha na conexão com o servidor.", variant: "destructive" });
-    }
-    setConnecting(null);
-  };
-
   return (
     <div className="flex h-screen overflow-hidden">
       <CrmSidebar />
       <main className="flex-1 overflow-y-auto">
         <header className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b border-border px-6 py-3">
-          <h1 className="text-lg font-bold text-foreground tracking-tight">Integrações Sociais</h1>
-          <p className="text-xs text-muted-foreground">Conecte suas redes sociais para captura omnichannel</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-lg font-bold text-foreground tracking-tight">Integrações</h1>
+              <p className="text-xs text-muted-foreground">Conecte Google e Meta ao NexusCRM de forma segura</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-[10px] gap-1">
+                <Shield className="w-3 h-3" /> OAuth 2.0
+              </Badge>
+              <Link to="/privacy" className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline">
+                Política de Privacidade
+              </Link>
+            </div>
+          </div>
         </header>
         <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl">
-            {providers.map((p) => {
-              const isConnected = connected[p.id];
-              const isConnecting = connecting === p.id;
-              return (
-                <Card key={p.id} className="shadow-card border-border hover:border-primary/30 transition-colors">
-                  <CardHeader className="flex flex-row items-start gap-4 space-y-0">
-                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${p.color} flex items-center justify-center flex-shrink-0`}>
-                      <p.icon className="w-6 h-6 text-foreground" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <CardTitle className="text-base">{p.name}</CardTitle>
-                        {isConnected && (
-                          <Badge className="bg-success/15 text-success border-0 text-[10px]">
-                            <CheckCircle2 className="w-3 h-3 mr-1" />Ativo
-                          </Badge>
-                        )}
-                      </div>
-                      <CardDescription className="text-xs mt-1">{p.description}</CardDescription>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <Button onClick={() => handleConnect(p.id)} disabled={isConnecting || isConnected} variant={isConnected ? "secondary" : "default"} size="sm" className="w-full">
-                      {isConnecting && <Loader2 className="w-4 h-4 animate-spin" />}
-                      {isConnected ? "Conectado" : isConnecting ? "Autenticando..." : "Conectar"}
-                    </Button>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+          <IntegrationWizard />
         </div>
       </main>
     </div>

@@ -1,39 +1,29 @@
 
 
-## Plan: Add Authentication (Login & Signup)
+## Plan: Auto-advance wizard after Google OAuth return
 
-Since all tables have RLS policies requiring `auth.uid() = user_id`, users need to be authenticated to see or create any data. I'll add a complete auth flow.
+### Problem
+When the user clicks "Conectar com Google", they are redirected to Google's OAuth page. After authenticating, they return to the app at `/` (the `redirect_uri`). The wizard resets to Step 0 because the component state is lost during the redirect.
 
-### What will be built
+### Solution
+Use `localStorage` to persist the wizard state (`selectedProvider = "google"`) before the OAuth redirect. On mount, check if:
+1. There's a persisted provider in localStorage
+2. The user is authenticated (via `supabase.auth.getUser()`)
 
-1. **Auth page** (`src/pages/Auth.tsx`) -- Login and signup forms with email/password, toggling between modes. Includes password reset request flow.
+If both are true, auto-insert a `social_connections` record for Google, clear localStorage, show a success toast, and jump directly to Step 2 (Permissions).
 
-2. **Auth context** (`src/hooks/use-auth.tsx`) -- React context wrapping `supabase.auth.onAuthStateChange` and `getSession`. Provides `user`, `session`, `loading`, `signIn`, `signUp`, `signOut`.
+### Changes
 
-3. **Protected route wrapper** (`src/components/ProtectedRoute.tsx`) -- Redirects unauthenticated users to `/auth`. Shows loading spinner while session is resolving.
-
-4. **Reset password page** (`src/pages/ResetPassword.tsx`) -- Handles the `type=recovery` redirect from the password reset email. Lets user set a new password.
-
-5. **App.tsx updates** -- Wrap all CRM routes with `ProtectedRoute`. Add `/auth` and `/reset-password` as public routes.
-
-6. **Sidebar update** -- Add user email display and logout button at the bottom of `CrmSidebar`.
+**`src/components/crm/IntegrationWizard.tsx`**:
+- Add a `useEffect` that runs on mount:
+  - Reads `nexus_integration_pending` from localStorage
+  - If value is `"google"`, calls `supabase.auth.getUser()`
+  - If user exists, inserts into `social_connections`, sets `selectedProvider = "google"`, `step = 2`, clears localStorage, shows toast
+- Before the Google OAuth redirect in `handleConnect`, save `localStorage.setItem("nexus_integration_pending", "google")`
+- Import `useEffect` from React
 
 ### Technical details
-
-- **No database migration needed** -- Auth uses built-in `auth.users`, no profiles table required (user didn't request profile data).
-- **Email confirmation** -- Kept enabled (default). Users must verify email before signing in.
-- **Sign up** uses `emailRedirectTo: window.location.origin` for the confirmation link.
-- **Password reset** uses `redirectTo: window.location.origin + '/reset-password'`.
-- **Session listener** set up with `onAuthStateChange` before `getSession()` per best practices.
-- All existing hooks (`useLeads`, `useInteractions`) already pass `user_id` on inserts -- no changes needed there.
-
-### Files to create
-- `src/hooks/use-auth.tsx`
-- `src/pages/Auth.tsx`
-- `src/pages/ResetPassword.tsx`
-- `src/components/ProtectedRoute.tsx`
-
-### Files to modify
-- `src/App.tsx` -- Add auth provider, public/protected routes
-- `src/components/crm/CrmSidebar.tsx` -- Add user info + logout button
+- Key name: `nexus_integration_pending`
+- The redirect_uri stays as `window.location.origin`, so the user lands on `/` after OAuth. The `ProtectedRoute` will then render the last visited page. To ensure they land on the integrations page, we'll change `redirect_uri` to `window.location.origin + "/settings/integrations"`.
+- The useEffect checks and cleans up in one pass to avoid double-processing.
 

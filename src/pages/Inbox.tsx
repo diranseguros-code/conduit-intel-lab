@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CrmSidebar } from "@/components/crm/CrmSidebar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { useInteractions } from "@/hooks/use-interactions";
+import { useSendWhatsApp } from "@/hooks/use-send-message";
 import { useCreateInteraction } from "@/hooks/use-create-interaction";
 import {
   Instagram, MessageCircle, Linkedin, Facebook,
@@ -40,10 +41,23 @@ export default function Inbox() {
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
 
-  const { data: interactions = [], isLoading } = useInteractions(filter);
+  const { data: interactions = [], isLoading, refetch } = useInteractions(filter);
+  const sendWhatsApp = useSendWhatsApp();
   const createInteraction = useCreateInteraction();
 
   const selected = interactions.find((i) => i.id === selectedId) ?? (interactions.length > 0 && !selectedId ? interactions[0] : null);
+
+  // Realtime subscription for incoming messages
+  useEffect(() => {
+    const channel = supabase
+      .channel("inbox-realtime")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "interactions" }, () => {
+        refetch();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [refetch]);
 
   const handleAnalyze = async (interactionId: string) => {
     setAnalyzing(interactionId);
@@ -69,17 +83,28 @@ export default function Inbox() {
 
     setSending(true);
     try {
-      await createInteraction.mutateAsync({
-        lead_id: selected.lead_id,
-        provider: selected.provider,
-        content_type: "text",
-        message_content: replyText.trim(),
-        direction: "outbound",
-      });
-      toast({ title: "Mensagem enviada", description: `Resposta registrada para ${selected.leads.name}` });
+      if (selected.provider === "whatsapp") {
+        // Send via WhatsApp edge function
+        const phone = selected.leads?.phone || selected.leads?.email || "";
+        await sendWhatsApp.mutateAsync({
+          lead_id: selected.lead_id,
+          phone_number: phone,
+          message: replyText.trim(),
+        });
+      } else {
+        // For other providers, save interaction directly
+        await createInteraction.mutateAsync({
+          lead_id: selected.lead_id,
+          provider: selected.provider,
+          content_type: "text",
+          message_content: replyText.trim(),
+          direction: "outbound",
+        });
+        toast({ title: "Mensagem enviada!", description: `Resposta registrada para ${selected.leads.name}` });
+      }
       setReplyText("");
     } catch {
-      // Error handled by hook
+      // Error handled by hooks
     }
     setSending(false);
   };
@@ -178,7 +203,6 @@ export default function Inbox() {
                   </Card>
                 )}
 
-                {/* Show all interactions for this lead */}
                 {interactions
                   .filter((i) => i.lead_id === selected.lead_id)
                   .map((msg) => {
@@ -208,7 +232,7 @@ export default function Inbox() {
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
-                    placeholder="Responder..."
+                    placeholder={`Responder via ${selected.provider}...`}
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter" && !sending) handleSendReply(); }}
